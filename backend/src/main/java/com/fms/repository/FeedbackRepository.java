@@ -11,4 +11,5 @@ public interface FeedbackRepository extends JpaRepository<Feedback, Integer> {
     List<Feedback> findAllByOrderByCreatedAtDesc();
     List<Feedback> findByTripDriverDriverId(Integer driverId);
     List<Feedback> findByShowPublicTrueOrderByCreatedAtDesc();
+    List<Feedback> findByTripTripId(Integer tripId);
 }

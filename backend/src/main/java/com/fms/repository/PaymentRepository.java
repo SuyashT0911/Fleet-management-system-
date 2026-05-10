@@ -9,4 +9,5 @@ public interface PaymentRepository extends JpaRepository<Payment, Integer> {
     
     @org.springframework.data.jpa.repository.Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p WHERE p.status IN ('paid', 'completed', 'success')")
     java.math.BigDecimal getTotalRevenue();
+    List<Payment> findByTripTripId(Integer tripId);
 }

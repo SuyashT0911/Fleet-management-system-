@@ -19,16 +19,23 @@ const Maintenance = () => {
   const [loading, setLoading] = useState(true);
   const initialForm = { vehicleId: '', type: 'Routine', status: 'scheduled', date: '', cost: '', workshop: '', description: '' };
   const [form, setForm] = useState(initialForm);
+  const [activeTab, setActiveTab] = useState('logs');
+  const [serviceRequests, setServiceRequests] = useState([]);
 
   useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [mRes, vRes] = await Promise.all([api.get('/maintenance'), api.get('/vehicles')]);
+      const [mRes, vRes, sRes] = await Promise.all([
+        api.get('/maintenance'), 
+        api.get('/vehicles'),
+        api.get('/service-requests')
+      ]);
       setRecords(mRes.data);
       setVehicles(vRes.data);
-    } catch (err) { console.error("Failed to fetch maintenance", err); }
+      setServiceRequests(sRes.data);
+    } catch (err) { console.error("Failed to fetch data", err); }
     finally { setLoading(false); }
   };
 
@@ -82,6 +89,13 @@ const Maintenance = () => {
     }
   };
 
+  const handleServiceAction = async (id, status) => {
+    try {
+      await api.put(`/service-requests/${id}/status`, status);
+      fetchData();
+    } catch (err) { console.error("Action failed", err); }
+  };
+
   return (
     <div className="page-content">
       <div className="page-header">
@@ -89,7 +103,7 @@ const Maintenance = () => {
         <button className="btn btn-primary" onClick={() => setShowModal(true)}><FiPlus /> Schedule Service</button>
       </div>
 
-      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginBottom: 24 }}>
         <div className="kpi-card" style={{ cursor: 'pointer', borderColor: filter === 'ALL' ? 'var(--primary)' : undefined }} onClick={() => setFilter('ALL')}>
           <div className="kpi-icon" style={{ background: 'rgba(99,102,241,0.12)', color: '#6366f1' }}><FiTool /></div>
           <div className="kpi-info"><h3>All Records</h3><div className="kpi-value">{records.length}</div></div>
@@ -102,43 +116,78 @@ const Maintenance = () => {
         ))}
       </div>
 
-      <div className="data-table-wrapper">
-        <div className="data-table-header">
-          <h2>Maintenance Log ({filtered.length})</h2>
-          <div className="search-bar">
-            <FiSearch className="search-icon" />
-            <input type="text" className="form-control" placeholder="Search vehicle..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ paddingLeft: 40, width: 250 }} />
-          </div>
+      <div style={{ marginBottom: 20 }}>
+        <div className="tab-group">
+          <button className={`tab-btn ${activeTab === 'logs' ? 'active' : ''}`} onClick={() => setActiveTab('logs')}>Maintenance Logs</button>
+          <button className={`tab-btn ${activeTab === 'requests' ? 'active' : ''}`} onClick={() => setActiveTab('requests')}>
+            Driver Requests ({serviceRequests.filter(s => s.status === 'pending').length})
+          </button>
         </div>
-        <table className="data-table">
-          <thead><tr><th>ID</th><th>Vehicle</th><th>Type</th><th>Status</th><th>Date</th><th>Workshop</th><th>Cost</th><th>Actions</th></tr></thead>
-          <tbody>
-            {loading && <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Loading...</td></tr>}
-            {!loading && filtered.map(r => (
-              <tr key={r.maintenanceId}>
-                <td style={{ fontWeight: 600 }}>#{r.maintenanceId}</td>
-                <td style={{ fontWeight: 600 }}>{r.vehicle?.registrationNumber || 'N/A'}</td>
-                <td>{r.type}</td>
-                <td><span className={`badge ${(statusConfig[r.status] || statusConfig.scheduled).badge}`}>{statusLabels[r.status] || r.status}</span></td>
-                <td>{r.date}</td>
-                <td>{r.workshop || '-'}</td>
-                <td style={{ color: r.cost ? '#ef4444' : 'var(--text-muted)', fontWeight: 600 }}>{r.cost ? `₹${parseFloat(r.cost).toLocaleString()}` : '-'}</td>
-                <td style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <select className="form-control" value={r.status} onChange={(e) => handleStatusChange(r.maintenanceId, e.target.value)} style={{ width: 140, fontSize: 12, padding: '4px 8px' }}>
-                    <option value="scheduled">Scheduled</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="completed">Completed</option>
-                  </select>
-                  <button className="btn btn-icon btn-danger btn-sm" onClick={() => handleDelete(r.maintenanceId)} title="Delete Record" style={{ padding: 6 }}>
-                    <FiEdit2 style={{ display: 'none' }} />✕
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {!loading && filtered.length === 0 && <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No records found.</td></tr>}
-          </tbody>
-        </table>
       </div>
+
+      {activeTab === 'logs' ? (
+        <div className="data-table-wrapper">
+          <div className="data-table-header">
+            <h2>Maintenance Log ({filtered.length})</h2>
+            <div className="search-bar">
+              <FiSearch className="search-icon" />
+              <input type="text" className="form-control" placeholder="Search vehicle..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ paddingLeft: 40, width: 250 }} />
+            </div>
+          </div>
+          <table className="data-table">
+            <thead><tr><th>ID</th><th>Vehicle</th><th>Type</th><th>Status</th><th>Date</th><th>Workshop</th><th>Cost</th><th>Actions</th></tr></thead>
+            <tbody>
+              {loading && <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40 }}>Loading...</td></tr>}
+              {!loading && filtered.map(r => (
+                <tr key={r.maintenanceId}>
+                  <td style={{ fontWeight: 600 }}>#{r.maintenanceId}</td>
+                  <td style={{ fontWeight: 600 }}>{r.vehicle?.registrationNumber || 'N/A'}</td>
+                  <td>{r.type}</td>
+                  <td><span className={`badge ${(statusConfig[r.status] || statusConfig.scheduled).badge}`}>{statusLabels[r.status] || r.status}</span></td>
+                  <td>{r.date}</td>
+                  <td>{r.workshop || '-'}</td>
+                  <td style={{ color: r.cost ? '#ef4444' : 'var(--text-muted)', fontWeight: 600 }}>{r.cost ? `₹${parseFloat(r.cost).toLocaleString()}` : '-'}</td>
+                  <td style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <select className="form-control" value={r.status} onChange={(e) => handleStatusChange(r.maintenanceId, e.target.value)} style={{ width: 140, fontSize: 12, padding: '4px 8px' }}>
+                      <option value="scheduled">Scheduled</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                    <button className="btn btn-icon btn-danger btn-sm" onClick={() => handleDelete(r.maintenanceId)}>✕</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="data-table-wrapper">
+          <div className="data-table-header"><h2>Pending Service Requests</h2></div>
+          <table className="data-table">
+            <thead><tr><th>Req ID</th><th>Vehicle</th><th>Date</th><th>Description</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>
+              {serviceRequests.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40 }}>No requests.</td></tr>}
+              {serviceRequests.map(s => (
+                <tr key={s.requestId}>
+                  <td>#{s.requestId}</td>
+                  <td style={{ fontWeight: 600 }}>{s.vehicle?.registrationNumber}</td>
+                  <td>{s.requestDate}</td>
+                  <td>{s.description}</td>
+                  <td><span className={`badge ${s.status === 'approved' ? 'badge-success' : s.status === 'pending' ? 'badge-warning' : 'badge-danger'}`}>{s.status}</span></td>
+                  <td>
+                    {s.status === 'pending' && (
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="btn btn-success btn-sm" onClick={() => handleServiceAction(s.requestId, 'approved')}>Approve</button>
+                        <button className="btn btn-danger btn-sm" onClick={() => handleServiceAction(s.requestId, 'rejected')}>Reject</button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
@@ -148,7 +197,7 @@ const Maintenance = () => {
               <div className="form-group"><label>Vehicle *</label>
                 <select className="form-control" value={form.vehicleId} onChange={(e) => setForm({ ...form, vehicleId: e.target.value })} required>
                   <option value="">Select Vehicle</option>
-                  {vehicles.map(v => <option key={v.vehicleId} value={v.vehicleId}>{v.registrationNumber} ({v.vehicleType?.typeName || v.model})</option>)}
+                  {vehicles.map(v => <option key={v.vehicleId} value={v.vehicleId}>{v.registrationNumber}</option>)}
                 </select>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -158,10 +207,6 @@ const Maintenance = () => {
                   </select>
                 </div>
                 <div className="form-group"><label>Date *</label><input type="date" className="form-control" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} required /></div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <div className="form-group"><label>Workshop/Location</label><input className="form-control" value={form.workshop} onChange={(e) => setForm({ ...form, workshop: e.target.value })} /></div>
-                <div className="form-group"><label>Estimated Cost (₹)</label><input type="number" className="form-control" value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} /></div>
               </div>
               <div className="form-group"><label>Description</label><textarea className="form-control" rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
             </div>

@@ -54,6 +54,15 @@ public class UserController {
         return ResponseEntity.ok(customer);
     }
 
+    @GetMapping("/email/{email}/driver")
+    public ResponseEntity<com.fms.model.Driver> getDriverByEmail(@PathVariable String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
+        com.fms.model.Driver driver = driverRepository.findByUser(user)
+                .orElseThrow(() -> new ResourceNotFoundException("Driver profile not found for email: " + email));
+        return ResponseEntity.ok(driver);
+    }
+
     @Autowired
     private com.fms.repository.DriverRepository driverRepository;
     

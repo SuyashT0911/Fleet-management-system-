@@ -3,6 +3,7 @@ package com.fms.controller;
 import com.fms.model.Maintenance;
 import com.fms.repository.MaintenanceRepository;
 import com.fms.service.NotificationService;
+import com.fms.service.ExpenseService;
 import com.fms.exception.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +20,9 @@ public class MaintenanceController {
 
     @Autowired
     private NotificationService notificationService;
+
+    @Autowired
+    private ExpenseService expenseService;
 
     @GetMapping
     public ResponseEntity<List<Maintenance>> getAll() {
@@ -41,6 +45,12 @@ public class MaintenanceController {
             saved.getType() + " for vehicle " + vehicleNum + " on " + saved.getDate(),
             "warning", "maintenance", saved.getMaintenanceId()
         );
+        
+        // Sync with Expenses table
+        if (saved.getVehicle() != null && saved.getCost() != null) {
+            expenseService.createExpense(saved.getVehicle(), "maintenance", saved.getCost(), saved.getDate());
+        }
+        
         return ResponseEntity.ok(saved);
     }
 

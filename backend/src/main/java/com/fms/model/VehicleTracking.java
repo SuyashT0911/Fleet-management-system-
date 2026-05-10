@@ -15,6 +15,10 @@ public class VehicleTracking {
     @JoinColumn(name = "vehicle_id")
     private Vehicle vehicle;
 
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "trip_id")
+    private Trip trip;
+
     @Column(nullable = false, precision = 10, scale = 6)
     private BigDecimal latitude;
 
@@ -43,6 +47,14 @@ public class VehicleTracking {
 
     public void setVehicle(Vehicle vehicle) {
         this.vehicle = vehicle;
+    }
+
+    public Trip getTrip() {
+        return trip;
+    }
+
+    public void setTrip(Trip trip) {
+        this.trip = trip;
     }
 
     public BigDecimal getLatitude() {

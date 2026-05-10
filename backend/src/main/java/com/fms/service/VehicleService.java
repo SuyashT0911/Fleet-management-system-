@@ -1,6 +1,8 @@
 package com.fms.service;
 
 import com.fms.exception.ResourceNotFoundException;
+import com.fms.model.Insurance;
+import com.fms.repository.InsuranceRepository;
 import com.fms.model.Vehicle;
 import com.fms.model.VehicleType;
 import com.fms.repository.VehicleTypeRepository;
@@ -18,6 +20,9 @@ public class VehicleService {
 
     @Autowired
     private VehicleTypeRepository vehicleTypeRepository;
+
+    @Autowired
+    private InsuranceRepository insuranceRepository;
 
     public List<Vehicle> getAll() {
         return vehicleRepository.findAll();
@@ -40,9 +45,27 @@ public class VehicleService {
         return null;
     }
 
+    private void syncInsurance(Vehicle vehicle) {
+        if (vehicle.getInsuranceProvider() != null && vehicle.getInsuranceExpiry() != null) {
+            List<Insurance> existing = insuranceRepository.findByVehicle(vehicle);
+            Insurance ins;
+            if (existing.isEmpty()) {
+                ins = new Insurance();
+                ins.setVehicle(vehicle);
+            } else {
+                ins = existing.get(0); // Update most recent
+            }
+            ins.setProvider(vehicle.getInsuranceProvider());
+            ins.setExpiryDate(vehicle.getInsuranceExpiry());
+            insuranceRepository.save(ins);
+        }
+    }
+
     public Vehicle create(Vehicle vehicle) {
         vehicle.setVehicleType(resolveVehicleType(vehicle));
-        return vehicleRepository.save(vehicle);
+        Vehicle saved = vehicleRepository.save(vehicle);
+        syncInsurance(saved);
+        return saved;
     }
 
     public Vehicle update(Integer id, Vehicle vehicleDetails) {
@@ -60,7 +83,9 @@ public class VehicleService {
         vehicle.setInsuranceExpiry(vehicleDetails.getInsuranceExpiry());
 
         vehicle.setVehicleType(resolveVehicleType(vehicleDetails));
-        return vehicleRepository.save(vehicle);
+        Vehicle saved = vehicleRepository.save(vehicle);
+        syncInsurance(saved);
+        return saved;
     }
 
     public void delete(Integer id) {

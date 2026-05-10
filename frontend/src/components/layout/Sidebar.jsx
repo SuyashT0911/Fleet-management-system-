@@ -24,7 +24,7 @@ const driverMenu = [
   { path: '/driver/dashboard', label: 'Dashboard', icon: <FiGrid /> },
   { path: '/driver/my-trips', label: 'My Trips', icon: <FiMap /> },
   { path: '/driver/assigned', label: 'Assigned Trips', icon: <FiTruck /> },
-  { path: '/driver/incidents', label: 'Incidents', icon: <FiTool /> },
+  { path: '/driver/incidents', label: 'Service Requests', icon: <FiTool /> },
   { path: '/driver/profile', label: 'My Profile', icon: <FiUsers /> },
 ];
 

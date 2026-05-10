@@ -22,7 +22,7 @@ const mapDbTripToView = (t) => {
     vehicle: t.vehicle ? `${t.vehicle.vehicleType?.typeName || 'Vehicle'} (${t.vehicle.registrationNumber})` : 'Unassigned',
     status: t.tripStatus || 'scheduled',
     date: t.startTime ? new Date(t.startTime).toLocaleDateString() : 'N/A',
-    distance: t.distanceTravelled || 0,
+    distance: t.distance || t.distanceTravelled || 0,
     expectedTime: 'TBD',
     actualTime: 'N/A',
     progress: t.tripStatus === 'completed' ? 100 : (t.tripStatus === 'ongoing' ? 50 : 0),
@@ -70,7 +70,7 @@ const Trips = () => {
   const [filter, setFilter] = useState('ALL');
   
   const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [form, setForm] = useState({ routeFrom: '', routeTo: '', driver: '', vehicle: '', date: '', departureTime: '', distance: '', customer: '', profit: '' });
+  const [form, setForm] = useState({ routeFrom: '', routeTo: '', driver: '', vehicle: '', date: '', departureTime: '', distance: '', passengers: '1', kids: '0', customer: '', profit: '' });
   const [assignForm, setAssignForm] = useState({ driverId: '', vehicleId: '' });
 
   const [selectedTrip, setSelectedTrip] = useState(null);
@@ -84,8 +84,8 @@ const Trips = () => {
   const getCount = (status) => trips.filter(t => t.status === status).length;
 
   const handleSchedule = async () => {
-    if (!form.routeFrom || !form.routeTo || !form.driver || !form.vehicle || !form.date) {
-      alert('Please fill all required fields: From, To, Driver, Vehicle, and Date.');
+    if (!form.routeFrom || !form.routeTo || !form.driver || !form.vehicle || !form.date || !form.departureTime || !form.distance || !form.passengers) {
+      alert('Please fill all mandatory fields: From, To, Driver, Vehicle, Date, Time, Distance, and Passengers.');
       return;
     }
     try {
@@ -101,14 +101,17 @@ const Trips = () => {
         driver: { driverId: parseInt(form.driver) },
         route: { routeId: routeRes.data.routeId },
         startTime: `${form.date}T${form.departureTime || '00:00'}:00`,
-        distanceTravelled: 0,
+        distance: parseFloat(form.distance) || 0,
+        distanceTravelled: parseFloat(form.distance) || 0,
         profit: parseFloat(form.profit) || 0,
-        tripStatus: 'scheduled'
+        tripStatus: 'scheduled',
+        passengerCount: parseInt(form.passengers),
+        kidsCount: parseInt(form.kids || 0)
       };
       await api.post('/trips', tripPayload);
       fetchTrips();
       setShowScheduleModal(false);
-      setForm({ routeFrom: '', routeTo: '', driver: '', vehicle: '', date: '', departureTime: '', distance: '', customer: '', profit: '' });
+      setForm({ routeFrom: '', routeTo: '', driver: '', vehicle: '', date: '', departureTime: '', distance: '', passengers: '1', kids: '0', customer: '', profit: '' });
     } catch (err) {
       console.error(err);
       alert("Failed to create trip. " + (err.response?.data?.message || 'Check console.'));
@@ -134,6 +137,18 @@ const Trips = () => {
     } catch (err) {
       console.error(err);
       alert("Failed to assign trip.");
+    }
+  };
+
+  const handleTripDelete = async (id) => {
+    if (!window.confirm(`Are you sure you want to delete Trip #${id}? This will permanently remove all related expenses, fuel logs, and tracking data.`)) return;
+    try {
+      await api.delete(`/trips/${id}`);
+      fetchTrips();
+      alert("Trip and all related data deleted successfully.");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete trip.");
     }
   };
 
@@ -246,7 +261,12 @@ const Trips = () => {
               <tbody>
                 {filtered.map(t => (
                   <tr key={t.id} onClick={() => handleTripSelect(t)} style={{ cursor: 'pointer' }}>
-                    <td style={{ fontWeight: 600 }}>#{t.id}</td>
+                    <td style={{ fontWeight: 600 }}>
+                      #{t.id}
+                      {t.status === 'scheduled' && t.driver === 'Unknown Driver' && (
+                        <span className="badge badge-danger" style={{ marginLeft: 8, fontSize: 10, padding: '2px 6px', verticalAlign: 'middle' }}>NEW</span>
+                      )}
+                    </td>
                     <td style={{ fontWeight: 600 }}>{t.route}</td>
                     <td>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>{t.driver}</div>
@@ -255,7 +275,14 @@ const Trips = () => {
                     <td>{t.date}</td>
                     <td>{t.distance} km</td>
                     <td><span className={`badge ${statusConfig[t.status].badge}`}>{statusConfig[t.status].label}</span></td>
-                    <td><button className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); handleTripSelect(t); }}>View Large</button></td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); handleTripSelect(t); }}>View</button>
+                        <button className="btn btn-danger btn-sm" onClick={(e) => { e.stopPropagation(); handleTripDelete(t.id); }} title="Delete Trip and related data">
+                          <FiTrash2 />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
                 {filtered.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No trips found</td></tr>}
@@ -274,8 +301,8 @@ const Trips = () => {
             <div className="modal-header"><h2>Schedule New Trip</h2><button className="btn btn-icon btn-secondary" onClick={() => setShowScheduleModal(false)}>✕</button></div>
             <div className="modal-body">
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <div className="form-group"><label>From (Source)</label><input className="form-control" placeholder="e.g. Pune" value={form.routeFrom} onChange={(e) => setForm({ ...form, routeFrom: e.target.value })} /></div>
-                <div className="form-group"><label>To (Destination)</label><input className="form-control" placeholder="e.g. Mumbai" value={form.routeTo} onChange={(e) => setForm({ ...form, routeTo: e.target.value })} /></div>
+                <div className="form-group"><label>From (Source) *</label><input className="form-control" placeholder="e.g. Pune" value={form.routeFrom} onChange={(e) => setForm({ ...form, routeFrom: e.target.value })} /></div>
+                <div className="form-group"><label>To (Destination) *</label><input className="form-control" placeholder="e.g. Mumbai" value={form.routeTo} onChange={(e) => setForm({ ...form, routeTo: e.target.value })} /></div>
               </div>
               <div className="form-group"><label>Assign Customer</label>
                 <select className="form-control" value={form.customer} onChange={(e) => setForm({ ...form, customer: e.target.value })}>
@@ -300,12 +327,19 @@ const Trips = () => {
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
-                <div className="form-group"><label>Date</label><input type="date" className="form-control" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></div>
-                <div className="form-group"><label>Time</label><input type="time" className="form-control" value={form.departureTime} onChange={(e) => setForm({ ...form, departureTime: e.target.value })} /></div>
-                <div className="form-group"><label>Distance (km)</label><input type="number" className="form-control" value={form.distance} onChange={(e) => setForm({ ...form, distance: e.target.value })} /></div>
+                <div className="form-group"><label>Date *</label><input type="date" className="form-control" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></div>
+                <div className="form-group"><label>Time *</label><input type="time" className="form-control" value={form.departureTime} onChange={(e) => setForm({ ...form, departureTime: e.target.value })} /></div>
+                <div className="form-group"><label>Distance (km) *</label><input type="number" className="form-control" value={form.distance} onChange={(e) => setForm({ ...form, distance: e.target.value })} /></div>
               </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div className="form-group"><label>Passengers (Adults) *</label><input type="number" min="1" className="form-control" value={form.passengers} onChange={(e) => setForm({ ...form, passengers: e.target.value })} /></div>
+                <div className="form-group"><label>Kids (Under 15) <small>(Optional)</small></label><input type="number" min="0" className="form-control" value={form.kids} onChange={(e) => setForm({ ...form, kids: e.target.value })} /></div>
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: -8 }}>
+                <strong>Note:</strong> Kids are only considered when under 15 age or lower.
+              </p>
             </div>
-            <div className="modal-footer"><button className="btn btn-secondary" onClick={() => setShowScheduleModal(false)}>Cancel</button><button className="btn btn-primary" onClick={handleSchedule}>Schedule Trip</button></div>
+            <div className="modal-footer"><button className="btn btn-secondary" onClick={() => setShowScheduleModal(false)}>Cancel</button><button className="btn btn-primary" onClick={handleSchedule} disabled={!form.routeFrom || !form.routeTo || !form.driver || !form.vehicle || !form.date || !form.departureTime || !form.distance || !form.passengers}>Schedule Trip</button></div>
           </div>
         </div>
       )}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { FiNavigation, FiTruck, FiClock, FiMapPin, FiAlertCircle, FiDroplet, FiCheckCircle, FiPlay, FiPause, FiFlag, FiStar, FiBell, FiX, FiCheckCircle as FiCheckCircleSolid, FiActivity } from 'react-icons/fi';
+import { FiNavigation, FiTruck, FiClock, FiMapPin, FiAlertCircle, FiDroplet, FiCheckCircle, FiPlay, FiPause, FiFlag, FiStar, FiBell, FiX, FiCheckCircle as FiCheckCircleSolid, FiActivity, FiTool } from 'react-icons/fi';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
@@ -14,6 +14,12 @@ const DriverDashboard = () => {
   const [showFuelModal, setShowFuelModal] = useState(false);
   const [incidentForm, setIncidentForm] = useState({ type: 'Breakdown', description: '' });
   const [fuelForm, setFuelForm] = useState({ quantity: '', cost: '', mileage: '' });
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('Cash');
+  const [paymentAmount, setPaymentAmount] = useState(0);
+  const [qrScanned, setQrScanned] = useState(false);
+  const [showServiceModal, setShowServiceModal] = useState(false);
+  const [serviceForm, setServiceForm] = useState({ description: '', vehicleId: '' });
 
   // Find driver record by user email
   const fetchDriverData = useCallback(async () => {
@@ -24,9 +30,9 @@ const DriverDashboard = () => {
       const myDriver = driversRes.data.find(d => d.user?.userId === userData.userId);
       if (myDriver) {
         setDriverInfo(myDriver);
+        setServiceForm(prev => ({ ...prev, vehicleId: myDriver.vehicle?.vehicleId || '' }));
         const tripsRes = await api.get(`/trips/driver/${myDriver.driverId}`);
         setTrips(tripsRes.data);
-        
       }
     } catch (err) { console.error('Driver data fetch error', err); }
     finally { setLoading(false); }
@@ -42,13 +48,43 @@ const DriverDashboard = () => {
     try {
       const trip = trips.find(t => t.tripId === tripId);
       const payload = { ...trip, tripStatus: newStatus };
-      if (newStatus === 'completed') payload.endTime = new Date().toISOString();
+      if (newStatus === 'completed') {
+        payload.endTime = new Date().toISOString();
+        payload.profit = trip.route?.distance ? (trip.route.distance * 15).toFixed(2) : 0;
+      }
       await api.put(`/trips/${tripId}`, payload);
       fetchDriverData();
       if (selectedTrip?.tripId === tripId) {
-        setSelectedTrip(prev => ({ ...prev, tripStatus: newStatus }));
+        setSelectedTrip(prev => ({ ...prev, ...payload }));
       }
     } catch (err) { console.error('Status update error', err); alert('Failed to update trip status'); }
+  };
+
+  const handleInitiateCompletion = (trip) => {
+    setSelectedTrip(trip);
+    const amt = trip.route?.distance ? (trip.route.distance * 15).toFixed(2) : 0;
+    setPaymentAmount(amt);
+    setPaymentMethod('Cash');
+    setQrScanned(false);
+    setShowPaymentModal(true);
+  };
+
+  const completeTripWithPayment = async () => {
+    try {
+      await api.post('/payments', {
+        trip: { tripId: selectedTrip.tripId },
+        amount: parseFloat(paymentAmount),
+        paymentDate: new Date().toISOString().split('T')[0],
+        method: paymentMethod,
+        status: 'completed'
+      });
+      await updateTripStatus(selectedTrip.tripId, 'completed');
+      setShowPaymentModal(false);
+      alert('Payment collected and trip completed!');
+    } catch (err) {
+      console.error(err);
+      alert('Failed to complete payment.');
+    }
   };
 
   const submitIncident = async () => {
@@ -87,6 +123,25 @@ const DriverDashboard = () => {
     } catch (err) { console.error(err); alert('Failed to log fuel'); }
   };
 
+  const submitServiceRequest = async () => {
+    if (!serviceForm.description.trim()) { alert('Please enter request description'); return; }
+    try {
+      // Priority: 1. Selected Trip's vehicle, 2. Manual form ID, 3. Driver's default vehicle
+      const vId = selectedTrip?.vehicle?.vehicleId || serviceForm.vehicleId || driverInfo?.vehicle?.vehicleId;
+      if (!vId) { alert('No vehicle associated with this request'); return; }
+
+      await api.post('/service-requests', {
+        vehicle: { vehicleId: parseInt(vId) },
+        description: serviceForm.description,
+        requestDate: new Date().toISOString().split('T')[0],
+        status: 'pending'
+      });
+      setShowServiceModal(false);
+      setServiceForm(prev => ({ ...prev, description: '' }));
+      alert('Service request submitted to Admin!');
+    } catch (err) { console.error(err); alert('Failed to submit service request'); }
+  };
+
   const assignedTrips = trips.filter(t => t.tripStatus === 'scheduled');
   const acceptedTrips = trips.filter(t => t.tripStatus === 'accepted');
   const ongoingTrips = trips.filter(t => t.tripStatus === 'ongoing');
@@ -105,6 +160,11 @@ const DriverDashboard = () => {
         <div>
           <h1>Driver Dashboard</h1>
           <p>Welcome back, {driverInfo?.name || user?.name || 'Driver'}</p>
+        </div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <button className="btn btn-primary" onClick={() => setShowServiceModal(true)}>
+            <FiActivity style={{ marginRight: 8 }} /> Request Service
+          </button>
         </div>
       </div>
 
@@ -223,7 +283,7 @@ const DriverDashboard = () => {
               {selectedTrip.tripStatus === 'ongoing' && (
                 <>
                   <button className="btn btn-primary" style={{ justifyContent: 'center', width: '100%', background: 'linear-gradient(135deg, #10b981, #059669)' }}
-                    onClick={() => updateTripStatus(selectedTrip.tripId, 'completed')}>
+                    onClick={() => handleInitiateCompletion(selectedTrip)}>
                     <FiFlag /> Complete Trip
                   </button>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -232,6 +292,9 @@ const DriverDashboard = () => {
                     </button>
                     <button className="btn btn-secondary" onClick={() => setShowFuelModal(true)}>
                       <FiDroplet /> Log Fuel
+                    </button>
+                    <button className="btn btn-secondary" onClick={() => setShowServiceModal(true)} style={{ gridColumn: 'span 2' }}>
+                      <FiTool /> Request Service
                     </button>
                   </div>
                 </>
@@ -313,6 +376,92 @@ const DriverDashboard = () => {
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowFuelModal(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={submitFuelLog}><FiDroplet /> Save Fuel Log</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Payment Collection Modal */}
+      {showPaymentModal && selectedTrip && (
+        <div className="modal-overlay" onClick={() => setShowPaymentModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 400, textAlign: 'center' }}>
+            <div className="modal-header">
+              <h2>Collect Payment</h2>
+              <button className="btn btn-icon btn-secondary" onClick={() => setShowPaymentModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Amount to Collect</div>
+                <div style={{ fontSize: 36, fontWeight: 800, color: '#10b981' }}>₹{paymentAmount}</div>
+              </div>
+
+              <div className="form-group" style={{ textAlign: 'left' }}>
+                <label>Payment Method</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <button className={`btn ${paymentMethod === 'Cash' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setPaymentMethod('Cash'); setQrScanned(false); }}>Cash</button>
+                  <button className={`btn ${paymentMethod === 'UPI' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setPaymentMethod('UPI')}>UPI / QR</button>
+                </div>
+              </div>
+
+              {paymentMethod === 'UPI' && (
+                <div style={{ padding: 20, background: 'var(--bg-secondary)', borderRadius: 12, marginBottom: 20 }}>
+                  {!qrScanned ? (
+                    <>
+                      <div style={{ width: 150, height: 150, background: '#fff', margin: '0 auto 16px', padding: 10, borderRadius: 8 }}>
+                        <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=pay_trip_${selectedTrip.tripId}_amt_${paymentAmount}`} alt="QR Code" style={{ width: '100%' }} />
+                      </div>
+                      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>Ask customer to scan QR to pay.</p>
+                      <button className="btn btn-secondary btn-sm" onClick={() => setQrScanned(true)}>Simulate Customer Scan</button>
+                    </>
+                  ) : (
+                    <div style={{ color: '#10b981' }}>
+                      <FiCheckCircleSolid style={{ fontSize: 48, marginBottom: 10 }} />
+                      <h3 style={{ margin: 0 }}>Payment Verified!</h3>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <button 
+                className="btn btn-primary" 
+                style={{ width: '100%', padding: 14, fontSize: 16 }} 
+                disabled={paymentMethod === 'UPI' && !qrScanned}
+                onClick={completeTripWithPayment}
+              >
+                {paymentMethod === 'Cash' ? 'Confirm Cash Collected' : 'Complete Trip'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Service Request Modal */}
+      {showServiceModal && (
+        <div className="modal-overlay" onClick={() => setShowServiceModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2><FiTool style={{ marginRight: 8, color: 'var(--primary)' }} /> Request Maintenance</h2>
+              <button className="btn btn-icon btn-secondary" onClick={() => setShowServiceModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16 }}>
+                Request a non-emergency service or repair for your vehicle.
+              </p>
+              <div className="form-group">
+                <label>Description of Issue *</label>
+                <textarea className="form-control" rows={4} value={serviceForm.description}
+                  onChange={e => setServiceForm({ ...serviceForm, description: e.target.value })}
+                  placeholder="Describe what needs to be checked or repaired..." />
+              </div>
+              <div className="detail-card">
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  Vehicle: {selectedTrip?.vehicle?.registrationNumber || driverInfo?.vehicle?.registrationNumber || 'N/A'}
+                  {selectedTrip && <span style={{ marginLeft: 8 }}>(Trip #{selectedTrip.tripId})</span>}
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowServiceModal(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={submitServiceRequest}>Submit Request</button>
             </div>
           </div>
         </div>

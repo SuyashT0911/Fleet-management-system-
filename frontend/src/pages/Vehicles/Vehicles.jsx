@@ -73,6 +73,16 @@ const Vehicles = () => {
 
   const handleCloseModal = () => { setShowModal(false); setFormStep(1); setForm(initialForm); setEditId(null); };
 
+  const formatDate = (dateArr) => {
+    if (!dateArr) return '';
+    if (typeof dateArr === 'string') return dateArr;
+    if (Array.isArray(dateArr)) {
+      const [y, m, d] = dateArr;
+      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
+    return '';
+  };
+
   const openEdit = (v) => {
     setForm({
       registrationNumber: v.registrationNumber || '',
@@ -81,7 +91,7 @@ const Vehicles = () => {
       status: v.status || 'available',
       healthScore: v.healthScore || 100,
       insuranceProvider: v.insuranceProvider || '',
-      insuranceExpiry: v.insuranceExpiry || '',
+      insuranceExpiry: formatDate(v.insuranceExpiry),
       model: v.model || '',
       year: v.year || new Date().getFullYear(),
       chassisNumber: v.chassisNumber || ''
@@ -227,8 +237,13 @@ const Vehicles = () => {
               {formStep === 1 ? (
                 <>
                   <button type="button" className="btn btn-secondary" onClick={handleCloseModal}>Cancel</button>
-                  <button type="button" className="btn btn-primary" onClick={() => {
-                    if (!form.registrationNumber || !form.capacity) { alert('Please fill Vehicle Number and Capacity.'); return; }
+                  <button type="button" className="btn btn-primary" onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!form.registrationNumber || (form.capacity === '' || form.capacity === null)) { 
+                      alert('Please fill Vehicle Number and Capacity.'); 
+                      return; 
+                    }
                     setFormStep(2);
                   }}>Next Step ➔</button>
                 </>

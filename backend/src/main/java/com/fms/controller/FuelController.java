@@ -3,6 +3,7 @@ package com.fms.controller;
 import com.fms.model.FuelLog;
 import com.fms.repository.FuelLogRepository;
 import com.fms.service.NotificationService;
+import com.fms.service.ExpenseService;
 import com.fms.exception.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +20,9 @@ public class FuelController {
 
     @Autowired
     private NotificationService notificationService;
+
+    @Autowired
+    private ExpenseService expenseService;
 
     @GetMapping
     public ResponseEntity<List<FuelLog>> getAll() {
@@ -46,6 +50,12 @@ public class FuelController {
             (fullLog.getTrip() != null ? " (Trip #" + fullLog.getTrip().getTripId() + ")" : ""),
             "info", "fuel", saved.getFuelId()
         );
+        
+        // Sync with Expenses table
+        if (fullLog.getVehicle() != null && fullLog.getCost() != null) {
+            expenseService.createExpense(fullLog.getVehicle(), "fuel", fullLog.getCost(), fullLog.getDate());
+        }
+        
         return ResponseEntity.ok(saved);
     }
 

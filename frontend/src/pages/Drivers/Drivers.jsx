@@ -14,12 +14,14 @@ const Drivers = () => {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('ALL');
   const [showModal, setShowModal] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [leaveRequests, setLeaveRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const initialForm = { name: '', contactNumber: '', licenseNumber: '', status: 'active', experienceYears: 0 };
   const [form, setForm] = useState(initialForm);
   const [editId, setEditId] = useState(null);
 
-  useEffect(() => { fetchDrivers(); }, []);
+  useEffect(() => { fetchDrivers(); fetchLeaves(); }, []);
 
   const fetchDrivers = async () => {
     setLoading(true);
@@ -28,13 +30,27 @@ const Drivers = () => {
     finally { setLoading(false); }
   };
 
+  const fetchLeaves = async () => {
+    try {
+      const res = await api.get('/leaves');
+      setLeaveRequests(res.data);
+    } catch (err) {
+      console.error("Failed to fetch leaves", err);
+    }
+  };
+
+  const normalizeStatus = (status) => {
+    if (!status) return 'active';
+    return status.toLowerCase().replace(' ', '_');
+  };
+
   const filtered = drivers.filter(d => {
     const matchSearch = (d.name || '').toLowerCase().includes(search.toLowerCase());
-    const matchFilter = filter === 'ALL' || d.status === filter;
+    const matchFilter = filter === 'ALL' || normalizeStatus(d.status) === filter;
     return matchSearch && matchFilter;
   });
 
-  const getCount = (status) => drivers.filter(d => d.status === status).length;
+  const getCount = (status) => drivers.filter(d => normalizeStatus(d.status) === status).length;
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -68,17 +84,43 @@ const Drivers = () => {
   const openEdit = (d) => {
     setForm({
       name: d.name || '', contactNumber: d.contactNumber || '', licenseNumber: d.licenseNumber || '',
-      status: d.status || 'active', experienceYears: d.experienceYears || 0
+      status: normalizeStatus(d.status), experienceYears: d.experienceYears || 0
     });
     setEditId(d.driverId);
     setShowModal(true);
+  };
+
+  const handleLeaveAction = async (leaveId, action) => {
+    let rejectionReason = null;
+    if (action === 'rejected') {
+      rejectionReason = window.prompt("Please enter a reason for rejecting this leave request:");
+      if (rejectionReason === null) return; // cancelled
+      if (rejectionReason.trim() === '') {
+        alert("A reason is required to reject a leave request.");
+        return;
+      }
+    }
+
+    try {
+      await api.put(`/leaves/${leaveId}`, { status: action, rejectionReason });
+      fetchLeaves();
+      if (action === 'approved') fetchDrivers(); // update driver list status
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update leave status');
+    }
   };
 
   return (
     <div className="page-content">
       <div className="page-header">
         <div><h1>Driver Management</h1><p>Monitor your drivers, their statuses, and performance ratings</p></div>
-        <button className="btn btn-primary" onClick={() => { setEditId(null); setForm(initialForm); setShowModal(true); }}><FiPlus /> Add Driver</button>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button className="btn btn-secondary" onClick={() => { setShowLeaveModal(true); fetchLeaves(); }}>
+            Leave Requests {leaveRequests.filter(l => l.status === 'pending').length > 0 && <span className="badge badge-danger" style={{ marginLeft: 8, padding: '2px 6px', borderRadius: '50%' }}>{leaveRequests.filter(l => l.status === 'pending').length}</span>}
+          </button>
+          <button className="btn btn-primary" onClick={() => { setEditId(null); setForm(initialForm); setShowModal(true); }}><FiPlus /> Add Driver</button>
+        </div>
       </div>
 
       <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
@@ -123,7 +165,7 @@ const Drivers = () => {
                 <td>{d.contactNumber}</td>
                 <td>{d.licenseNumber}</td>
                 <td>{d.experienceYears || 0} yrs</td>
-                <td><span className={`badge ${(statusConfig[d.status] || statusConfig.active).badge}`}>{(statusConfig[d.status] || statusConfig.active).label}</span></td>
+                <td><span className={`badge ${(statusConfig[normalizeStatus(d.status)] || statusConfig.active).badge}`}>{(statusConfig[normalizeStatus(d.status)] || statusConfig.active).label}</span></td>
                 <td><div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#f59e0b', fontWeight: 600 }}><FiStar /> {parseFloat(d.rating) || 0}</div></td>
                 <td>
                   <div style={{ display: 'flex', gap: 6 }}>
@@ -151,13 +193,55 @@ const Drivers = () => {
                 <div className="form-group"><label>Experience (Years)</label><input type="number" className="form-control" min={0} value={form.experienceYears} onChange={(e) => setForm({ ...form, experienceYears: e.target.value })} /></div>
                 <div className="form-group"><label>Status</label>
                   <select className="form-control" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                    <option value="active">Active</option><option value="on_trip">On Trip</option><option value="on_leave">On Leave</option>
+                    <option value="active">Active</option>
+                    <option value="on_leave">On Leave</option>
+                    {form.status === 'on_trip' && <option value="on_trip" disabled>On Trip</option>}
                   </select>
                 </div>
               </div>
             </div>
             <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button><button type="submit" className="btn btn-primary">{editId ? 'Update' : 'Add Driver'}</button></div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showLeaveModal && (
+        <div className="modal-overlay" onClick={() => setShowLeaveModal(false)}>
+          <div className="modal" style={{ maxWidth: 700 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header"><h2>Driver Leave Requests</h2><button className="btn btn-icon btn-secondary" onClick={() => setShowLeaveModal(false)}>✕</button></div>
+            <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+              {leaveRequests.length === 0 ? (
+                 <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>No leave requests found.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {/* Sort so pending are on top, then by most recent */}
+                  {[...leaveRequests].sort((a, b) => (a.status === 'pending' ? -1 : 1) - (b.status === 'pending' ? -1 : 1)).map(leave => (
+                    <div key={leave.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 16, border: '1px solid var(--border)', borderRadius: 10, background: leave.status === 'pending' ? 'var(--bg-hover)' : 'transparent' }}>
+                      <div>
+                        <div style={{ fontWeight: 600, marginBottom: 4 }}>{leave.driver?.name}</div>
+                        <div style={{ fontSize: 13, marginBottom: 4 }}>{new Date(leave.fromDate).toLocaleDateString()} to {new Date(leave.toDate).toLocaleDateString()}</div>
+                        <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Reason: {leave.reason}</div>
+                        {leave.status === 'rejected' && leave.rejectionReason && (
+                          <div style={{ fontSize: 13, color: '#ef4444', marginTop: 4 }}><strong>Admin Note:</strong> {leave.rejectionReason}</div>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
+                        <span className={`badge badge-${leave.status === 'approved' ? 'success' : leave.status === 'rejected' ? 'danger' : 'warning'}`} style={{ textTransform: 'capitalize' }}>
+                          {leave.status}
+                        </span>
+                        {leave.status === 'pending' && (
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button className="btn btn-primary btn-sm" onClick={() => handleLeaveAction(leave.id, 'approved')}>Approve</button>
+                            <button className="btn btn-danger btn-sm" onClick={() => handleLeaveAction(leave.id, 'rejected')}>Reject</button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

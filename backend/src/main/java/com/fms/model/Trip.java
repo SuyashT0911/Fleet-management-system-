@@ -34,6 +34,9 @@ public class Trip {
     @Column(name = "end_time")
     private LocalDateTime endTime;
 
+    @Column(name = "distance", precision = 10, scale = 2)
+    private BigDecimal distance;
+
     @Column(name = "distance_travelled", precision = 10, scale = 2)
     private BigDecimal distanceTravelled;
 
@@ -42,6 +45,12 @@ public class Trip {
 
     @Column(precision = 10, scale = 2)
     private BigDecimal profit;
+
+    @Column(name = "passenger_count", nullable = false)
+    private Integer passengerCount;
+
+    @Column(name = "kids_count")
+    private Integer kidsCount = 0;
 
     public Integer getTripId() { return tripId; }
     public void setTripId(Integer tripId) { this.tripId = tripId; }
@@ -57,10 +66,16 @@ public class Trip {
     public void setStartTime(LocalDateTime startTime) { this.startTime = startTime; }
     public LocalDateTime getEndTime() { return endTime; }
     public void setEndTime(LocalDateTime endTime) { this.endTime = endTime; }
+    public BigDecimal getDistance() { return distance; }
+    public void setDistance(BigDecimal distance) { this.distance = distance; }
     public BigDecimal getDistanceTravelled() { return distanceTravelled; }
     public void setDistanceTravelled(BigDecimal distanceTravelled) { this.distanceTravelled = distanceTravelled; }
     public String getTripStatus() { return tripStatus; }
     public void setTripStatus(String tripStatus) { this.tripStatus = tripStatus; }
     public BigDecimal getProfit() { return profit; }
     public void setProfit(BigDecimal profit) { this.profit = profit; }
+    public Integer getPassengerCount() { return passengerCount; }
+    public void setPassengerCount(Integer passengerCount) { this.passengerCount = passengerCount; }
+    public Integer getKidsCount() { return kidsCount; }
+    public void setKidsCount(Integer kidsCount) { this.kidsCount = kidsCount; }
 }

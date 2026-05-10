@@ -35,9 +35,17 @@ public class NotificationService {
     }
 
     public void createForRole(String roleName, String title, String message, String type, String entityType, Integer entityId) {
-        List<User> users = userRepository.findByRoleRoleName(roleName);
+        List<User> users = userRepository.findAll();
+        boolean savedAny = false;
         for (User user : users) {
-            createForUser(user, title, message, type, entityType, entityId);
+            if (user.getRole() != null && roleName.equalsIgnoreCase(user.getRole().getRoleName())) {
+                createForUser(user, title, message, type, entityType, entityId);
+                savedAny = true;
+            }
+        }
+        // Fallback: If no user found with that role, save as a global notification so it's not lost
+        if (!savedAny) {
+            create(title, message, type, entityType, entityId);
         }
     }
 

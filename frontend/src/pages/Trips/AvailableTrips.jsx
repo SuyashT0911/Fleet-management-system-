@@ -12,7 +12,7 @@ const AvailableTrips = () => {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [showCustomForm, setShowCustomForm] = useState(false);
-  const [customForm, setCustomForm] = useState({ pickup: '', drop: '', startTime: '', vehicleType: '', notes: '', distance: '', paymentMethod: 'online' });
+  const [customForm, setCustomForm] = useState({ pickup: '', drop: '', startTime: '', vehicleType: '', notes: '', distance: '', passengers: '1', kids: '0', paymentMethod: 'online' });
   const [vehicles, setVehicles] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [booked, setBooked] = useState(false);
@@ -50,8 +50,8 @@ const AvailableTrips = () => {
   };
 
   const handleCustomBook = async () => {
-    if (!customForm.pickup.trim() || !customForm.drop.trim() || !customForm.startTime) {
-      alert('Please fill Pickup Point, Drop Point, and Departure Time.'); return;
+    if (!customForm.pickup.trim() || !customForm.drop.trim() || !customForm.startTime || !customForm.distance || !customForm.paymentMethod || !customForm.passengers) {
+      alert('Please fill all mandatory fields (Pickup, Drop, Time, Distance, Payment, Passengers).'); return;
     }
     if (!isAuthenticated) { navigate('/login'); return; }
     setSubmitting(true);
@@ -86,6 +86,8 @@ const AvailableTrips = () => {
         customer: { customerId: customerRes.data.customerId },
         startTime: customForm.startTime,
         tripStatus: 'scheduled',
+        passengerCount: parseInt(customForm.passengers),
+        kidsCount: parseInt(customForm.kids || 0)
       });
 
       setBooked(true);
@@ -180,11 +182,26 @@ const AvailableTrips = () => {
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                     <div className="form-group">
-                      <label>Est. Distance (km)</label>
+                      <label>Est. Distance (km) *</label>
                       <input type="number" className="form-control" placeholder="e.g. 15" value={customForm.distance}
                         onChange={e => setCustomForm({ ...customForm, distance: e.target.value })} />
                     </div>
                   </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div className="form-group">
+                      <label>Passengers (Adults) *</label>
+                      <input type="number" min="1" className="form-control" value={customForm.passengers}
+                        onChange={e => setCustomForm({ ...customForm, passengers: e.target.value })} />
+                    </div>
+                    <div className="form-group">
+                      <label>Kids (Under 15) <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>(Optional)</span></label>
+                      <input type="number" min="0" className="form-control" value={customForm.kids}
+                        onChange={e => setCustomForm({ ...customForm, kids: e.target.value })} />
+                    </div>
+                  </div>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: -8, marginBottom: 16 }}>
+                    <strong>Note:</strong> Kids are only considered when under 15 age or lower.
+                  </p>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                     <div className="form-group">
                       <label>Special Instructions</label>
@@ -193,9 +210,10 @@ const AvailableTrips = () => {
                         style={{ resize: 'vertical' }} />
                     </div>
                     <div className="form-group">
-                      <label>Payment Method</label>
+                      <label>Payment Method *</label>
                       <select className="form-control" value={customForm.paymentMethod}
                         onChange={e => setCustomForm({ ...customForm, paymentMethod: e.target.value })}>
+                        <option value="">Select Payment...</option>
                         <option value="online">Online (UPI/Card)</option>
                         <option value="cash">Cash</option>
                         <option value="wallet">Wallet</option>
@@ -204,7 +222,7 @@ const AvailableTrips = () => {
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 8 }}>
                     <button className="btn btn-secondary" onClick={() => setShowCustomForm(false)}>Cancel</button>
-                    <button className="btn btn-primary" onClick={handleCustomBook} disabled={submitting}>
+                    <button className="btn btn-primary" onClick={handleCustomBook} disabled={submitting || !customForm.pickup || !customForm.drop || !customForm.startTime || !customForm.distance || !customForm.paymentMethod || !customForm.passengers}>
                       {submitting ? 'Booking...' : 'Confirm & Book Custom Trip'}
                     </button>
                   </div>

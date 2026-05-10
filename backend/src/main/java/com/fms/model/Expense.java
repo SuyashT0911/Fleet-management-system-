@@ -15,6 +15,10 @@ public class Expense {
     @JoinColumn(name = "vehicle_id")
     private Vehicle vehicle;
 
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "trip_id")
+    private Trip trip;
+
     @Column(nullable = false, length = 20)
     private String type; // fuel, maintenance, other
 
@@ -40,6 +44,14 @@ public class Expense {
 
     public void setVehicle(Vehicle vehicle) {
         this.vehicle = vehicle;
+    }
+
+    public Trip getTrip() {
+        return trip;
+    }
+
+    public void setTrip(Trip trip) {
+        this.trip = trip;
     }
 
     public String getType() {

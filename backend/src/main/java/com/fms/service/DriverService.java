@@ -29,12 +29,11 @@ public class DriverService {
 
     public Driver update(Integer id, Driver details) {
         Driver driver = getById(id);
-        driver.setName(details.getName());
-        driver.setLicenseNumber(details.getLicenseNumber());
-        driver.setContactNumber(details.getContactNumber());
-        driver.setExperienceYears(details.getExperienceYears());
-        driver.setRating(details.getRating());
-        driver.setStatus(details.getStatus());
+        if (details.getName() != null) driver.setName(details.getName());
+        if (details.getLicenseNumber() != null) driver.setLicenseNumber(details.getLicenseNumber());
+        if (details.getContactNumber() != null) driver.setContactNumber(details.getContactNumber());
+        if (details.getExperienceYears() != null) driver.setExperienceYears(details.getExperienceYears());
+        if (details.getStatus() != null) driver.setStatus(details.getStatus());
         return driverRepository.save(driver);
     }
 

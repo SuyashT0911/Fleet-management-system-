@@ -2,6 +2,8 @@ package com.fms.controller;
 
 import com.fms.model.Payment;
 import com.fms.repository.PaymentRepository;
+import com.fms.model.Invoice;
+import com.fms.repository.InvoiceRepository;
 import com.fms.service.NotificationService;
 import com.fms.exception.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +22,9 @@ public class PaymentController {
     @Autowired
     private NotificationService notificationService;
 
+    @Autowired
+    private InvoiceRepository invoiceRepository;
+
     @GetMapping
     public ResponseEntity<List<Payment>> getAll() {
         return ResponseEntity.ok(paymentRepository.findAll());
@@ -35,6 +40,16 @@ public class PaymentController {
             "paid".equals(saved.getStatus()) ? "success" : "warning",
             "payment", saved.getPaymentId()
         );
+        
+        // Sync with Invoices table
+        if ("paid".equalsIgnoreCase(saved.getStatus())) {
+            Invoice invoice = new Invoice();
+            invoice.setPayment(saved);
+            invoice.setIssueDate(java.time.LocalDate.now());
+            invoice.setTotalAmount(saved.getAmount());
+            invoiceRepository.save(invoice);
+        }
+        
         return ResponseEntity.ok(saved);
     }
 
