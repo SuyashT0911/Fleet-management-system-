@@ -88,5 +88,4 @@ FleetPro/
 ## 🤝 Contributing
 This project is **open source**. Feel free to fork, report issues, or submit pull requests to help improve the Fleet Management ecosystem.
 
----
-*Developed by _ _ _ _
+
